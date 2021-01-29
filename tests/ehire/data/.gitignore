@@ -1,0 +1,4 @@
+/*.png
+/*.json
+!account.json
+!search_data.json

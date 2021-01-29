@@ -10,6 +10,12 @@ from selenium.webdriver.common.actions.pointer_input import PointerInput
 from selenium.webdriver.remote.webdriver import WebDriver, WebElement
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
+from selenium.common.exceptions import NoSuchElementException
+
+try:
+    from pydantic import BaseModel
+except ImportError:
+    BaseModel = None
 
 
 class CustomPointerInput(PointerInput):
@@ -37,7 +43,8 @@ class CustomActionChains(ActionChains):
         return self
 
 
-class GeeConfig:
+class GeeConfig(BaseModel or object):
+    """便于兼容 BaseModel"""
     bg_path: str = ''               # 背景图存储位置
     bg_with_slider_path: str = ''   # 带滑块背景图存储位置
     retry_times: int = 3            # 重试次数
@@ -51,10 +58,10 @@ class GeeConfig:
     wait_script_execution = 0.3     # js 代码运行等待时间
     wait_shake = 3                  # 这个是参考文章三的实现，暂时没碰到这种情况
     wait_retry = 2                  # 每次重试等待的时间
-    vait_before_validation = 3      # 移动之后调用 validation_passed 之前等待的时间
+    wait_before_validation = 3      # 移动之后调用 validation_passed 之前等待的时间
 
 
-class GeeTest:
+class GeeCracker:
     # SELECTORS
     SELECTOR_BG = "geetest_canvas_bg"           # 带滑块背景
     SELECTOR_FULLBG = "geetest_canvas_fullbg"   # 背景
@@ -93,24 +100,27 @@ class GeeTest:
         # 5. 移动滑块
         self._move_to_gap(slider, distance)
         # 6. 判断验证是否成功，如果失败则重复验证
-        time.sleep(self.config.vait_before_validation)
+        time.sleep(self.config.wait_before_validation)
         return self._validation_passed()
 
     def _validation_passed(self) -> bool:
+        flag = False
         try:
             geetest_class = self.driver.find_element_by_xpath(
                 self.XPATH_CHECK_VALIDATION_PASSED).get_attribute("class")
             if "geetest_panel_box" == geetest_class:
                 self.driver.find_element_by_xpath(
                     self.XPATH_PANEL_ERROR_CONTENT).click()
-                return False
             elif "geetest_panelshowslide geetest_shake" in geetest_class:
                 time.sleep(self.config.wait_shake)
-                return False
-        except Exception as e:
-            return True
-        else:
-            return False
+        except NoSuchElementException:
+            flag = True
+        # 上面是默认的验证流程，除了上面的验证以外，用户可能还需要有自定义验证，就重写 custom_validation 了
+        return flag and self.custom_validation()
+
+    def custom_validation(self) -> bool:
+        """一个简易的接口便于使用者添加自己想要的验证过程"""
+        return True
     # endregion
 
     # region get bg and bg_with_slider
@@ -280,10 +290,10 @@ class GeeTest:
 
 
 def validate(driver: WebDriver, config: GeeConfig = GeeConfig()) -> bool:
-    return GeeTest(driver, config).validate()
+    return GeeCracker(driver, config).validate()
 
 
 def panel_visible(driver: WebDriver) -> bool:
     """提供外部调用以确认是否激活了极验验证"""
-    panel_next = driver.find_element_by_class_name(GeeTest.SELECTOR_PANEL_NEXT)
+    panel_next = driver.find_element_by_class_name(GeeCracker.SELECTOR_PANEL_NEXT)
     return panel_next and panel_next.is_displayed()

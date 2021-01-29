@@ -1,1 +1,1 @@
-from .geecracker import GeeTest, validate, panel_visible, GeeConfig
+from .geecracker import GeeCracker, GeeConfig, validate, panel_visible
